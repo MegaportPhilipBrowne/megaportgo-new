@@ -16,17 +16,6 @@ const (
 	TEST_LOCATION_ID_A = 19 // 	Interactive 437 Williamstown
 )
 
-func TestListPorts(t *testing.T) {
-	setup()
-	defer teardown()
-	ctx := context.Background()
-	portRes, err := megaportClient.PortService.ListPorts(ctx)
-	if err != nil {
-		t.Fatalf("error listing ports: %s", err.Error())
-	}
-	fmt.Println("port response", portRes)
-}
-
 // TestSinglePort tests the creation of a LAG Port, then passes the id to PortScript to finalise lifecycle testing.
 func TestSinglePort(t *testing.T) {
 	ctx := context.Background()
@@ -43,6 +32,9 @@ func TestSinglePort(t *testing.T) {
 	}
 
 	portConfirmation, portErr := testCreatePort(megaportClient, ctx, types.SINGLE_PORT, *testLocation)
+	if !assert.NoError(t, portErr) {
+		t.FailNow()
+	}
 
 	portId := portConfirmation.TechnicalServiceUID
 
@@ -160,7 +152,7 @@ func testCreatePort(c *Client, ctx context.Context, portType string, location ty
 	var portConfirm *types.PortOrderConfirmation
 	var portErr error
 
-	logger.Debug("Buying Port:", portType)
+	logger.Debug("Buying Port", "port_type", portType)
 	if portType == types.LAG_PORT {
 		portConfirm, portErr = c.PortService.BuyLAGPort(ctx, &BuyLAGPortRequest{
 			Name:       "Buy Port (LAG) Test",
@@ -180,6 +172,9 @@ func testCreatePort(c *Client, ctx context.Context, portType string, location ty
 			Market:     location.Market,
 			IsPrivate:  true,
 		})
+	}
+	if portErr != nil {
+		return nil, portErr
 	}
 	logger.Debug("Port Purchased", "port_confirmation", portConfirm)
 	return portConfirm, portErr
@@ -218,8 +213,8 @@ func testCancelPort(c *Client, ctx context.Context, portId string, portType stri
 		PortID:    portId,
 		DeleteNow: false,
 	})
-	assert.True(t, resp.IsDeleting)
 	assert.NoError(t, deleteErr)
+	assert.True(t, resp.IsDeleting)
 
 	portInfo, err := c.PortService.GetPort(ctx, &GetPortRequest{PortID: portId})
 	assert.NoError(t, err)

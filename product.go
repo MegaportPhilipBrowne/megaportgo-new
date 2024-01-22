@@ -2,7 +2,6 @@ package megaport
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +12,7 @@ import (
 )
 
 type ProductService interface {
-	ExecuteOrder(ctx context.Context, requestBody *[]byte) (*[]byte, error)
+	ExecuteOrder(ctx context.Context, requestBody interface{}) (*[]byte, error)
 	ModifyProduct(ctx context.Context, req *ModifyProductRequest) (*ModifyProductResponse, error)
 	DeleteProduct(ctx context.Context, req *DeleteProductRequest) (*DeleteProductResponse, error)
 	RestoreProduct(ctx context.Context, req *RestoreProductRequest) (*RestoreProductResponse, error)
@@ -63,7 +62,7 @@ func NewProductServiceOp(c *Client) *ProductServiceOp {
 	}
 }
 
-func (svc *ProductServiceOp) ExecuteOrder(ctx context.Context, requestBody *[]byte) (*[]byte, error) {
+func (svc *ProductServiceOp) ExecuteOrder(ctx context.Context, requestBody interface{}) (*[]byte, error) {
 	path := "/v3/networkdesign/buy"
 
 	url := svc.Client.BaseURL.JoinPath(path).String()
@@ -109,13 +108,7 @@ func (svc *ProductServiceOp) ModifyProduct(ctx context.Context, req *ModifyProdu
 		path := fmt.Sprintf("/v2/product/%s/%s", req.ProductType, req.ProductID)
 		url := svc.Client.BaseURL.JoinPath(path).String()
 
-		body, marshalErr := json.Marshal(update)
-
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-
-		req, err := svc.Client.NewRequest(ctx, http.MethodPut, url, []byte(body))
+		req, err := svc.Client.NewRequest(ctx, http.MethodPut, url, update)
 
 		if err != nil {
 			return nil, err
@@ -149,7 +142,7 @@ func (svc *ProductServiceOp) DeleteProduct(ctx context.Context, req *DeleteProdu
 	path := "/v3/product/" + req.ProductID + "/action/" + action
 	url := svc.Client.BaseURL.JoinPath(path).String()
 
-	clientReq, err := svc.Client.NewRequest(ctx, http.MethodDelete, url, nil)
+	clientReq, err := svc.Client.NewRequest(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}

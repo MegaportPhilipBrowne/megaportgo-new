@@ -163,9 +163,9 @@ func (svc *PortServiceOp) BuyPort(ctx context.Context, req *BuyPortRequest) (*ty
 		}
 	}
 
-	requestBody, _ := json.Marshal(buyOrder)
-	responseBody, responseError := svc.Client.ProductService.ExecuteOrder(ctx, &requestBody)
+	responseBody, responseError := svc.Client.ProductService.ExecuteOrder(ctx, buyOrder)
 	if responseError != nil {
+		fmt.Println("Your product did not order properly :(")
 		return nil, responseError
 	}
 	orderInfo := types.PortOrderResponse{}
@@ -353,7 +353,7 @@ func (svc *PortServiceOp) LockPort(ctx context.Context, req *LockPortRequest) (*
 		if err != nil {
 			return nil, err
 		}
-		return &LockPortResponse{}, nil
+		return &LockPortResponse{IsLocking: true}, nil
 	} else {
 		return nil, errors.New(mega_err.ERR_PORT_ALREADY_LOCKED)
 	}
@@ -374,7 +374,7 @@ func (svc *PortServiceOp) UnlockPort(ctx context.Context, req *UnlockPortRequest
 		if err != nil {
 			return nil, err
 		}
-		return &UnlockPortResponse{}, nil
+		return &UnlockPortResponse{IsUnlocking: true}, nil
 	} else {
 		return nil, errors.New(mega_err.ERR_PORT_NOT_LOCKED)
 	}
