@@ -162,17 +162,14 @@ func (svc *ProductServiceOp) DeleteProduct(ctx context.Context, req *DeleteProdu
 }
 
 func (svc *ProductServiceOp) RestoreProduct(ctx context.Context, req *RestoreProductRequest) (*RestoreProductResponse, error) {
-	path := "/v2/product" + req.ProductID + "/action/UN_CANCEL"
+	path := "/v2/product/" + req.ProductID + "/action/UN_CANCEL"
 	url := svc.Client.BaseURL.JoinPath(path).String()
 	clientReq, err := svc.Client.NewRequest(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	response, err := svc.Client.Do(ctx, clientReq, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
+	defer response.Body.Close() // nolint
 
 	isError, errorMessage := svc.Client.IsErrorResponse(response, &err, 200)
 	if isError {

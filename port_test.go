@@ -222,8 +222,9 @@ func testCancelPort(c *Client, ctx context.Context, portId string, portType stri
 
 	logger.Debug("", "status", portInfo.ProvisioningStatus, "port_id", portId)
 	restoreResp, restoreErr := c.PortService.RestorePort(ctx, &RestorePortRequest{PortID: portId})
-	assert.True(t, restoreResp.IsRestoring)
 	assert.NoError(t, restoreErr)
+	assert.True(t, restoreResp.IsRestoring)
+
 }
 
 func testDeletePort(c *Client, ctx context.Context, portId string, portType string, t *testing.T) {

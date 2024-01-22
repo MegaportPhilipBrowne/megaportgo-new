@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/megaport/megaportgo/mega_err"
@@ -390,7 +389,7 @@ func (svc *PortServiceOp) WaitForPortProvisioning(ctx context.Context, portId st
 			return false, err
 		}
 
-		if slices.Contains(shared.SERVICE_STATE_READY, details.ProvisioningStatus) {
+		if details.ProvisioningStatus == shared.SERVICE_LIVE {
 			return true, nil
 		}
 
