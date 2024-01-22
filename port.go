@@ -93,25 +93,33 @@ type DeletePortRequest struct {
 	DeleteNow bool
 }
 
-type DeletePortResponse struct{}
+type DeletePortResponse struct {
+	IsDeleting bool
+}
 
 type RestorePortRequest struct {
 	PortID string
 }
 
-type RestorePortResponse struct{}
+type RestorePortResponse struct {
+	IsRestoring bool
+}
 
 type LockPortRequest struct {
 	PortID string
 }
 
-type LockPortResponse struct{}
+type LockPortResponse struct {
+	IsLocking bool
+}
 
 type UnlockPortRequest struct {
 	PortID string
 }
 
-type UnlockPortResponse struct{}
+type UnlockPortResponse struct {
+	IsUnlocking bool
+}
 
 func NewPortServiceOp(c *Client) *PortServiceOp {
 	return &PortServiceOp{
@@ -313,7 +321,9 @@ func (svc *PortServiceOp) DeletePort(ctx context.Context, req *DeletePortRequest
 	if err != nil {
 		return nil, err
 	}
-	return &DeletePortResponse{}, nil
+	return &DeletePortResponse{
+		IsDeleting: true,
+	}, nil
 }
 
 func (svc *PortServiceOp) RestorePort(ctx context.Context, req *RestorePortRequest) (*RestorePortResponse, error) {
@@ -323,7 +333,9 @@ func (svc *PortServiceOp) RestorePort(ctx context.Context, req *RestorePortReque
 	if err != nil {
 		return nil, err
 	}
-	return &RestorePortResponse{}, nil
+	return &RestorePortResponse{
+		IsRestoring: true,
+	}, nil
 }
 
 func (svc *PortServiceOp) LockPort(ctx context.Context, req *LockPortRequest) (*LockPortResponse, error) {
