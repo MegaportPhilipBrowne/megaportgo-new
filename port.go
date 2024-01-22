@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"time"
 
 	"github.com/megaport/megaportgo/mega_err"
 	"github.com/megaport/megaportgo/shared"
@@ -21,8 +23,13 @@ type PortService interface {
 	BuySinglePort(ctx context.Context, req *BuySinglePortRequest) (*types.PortOrderConfirmation, error)
 	BuyLAGPort(ctx context.Context, req *BuyLAGPortRequest) (*types.PortOrderConfirmation, error)
 	ListPorts(ctx context.Context) ([]*types.Port, error)
+	GetPort(ctx context.Context, req *GetPortRequest) (*types.Port, error)
 	ModifyPort(ctx context.Context, req *ModifyPortRequest) (*ModifyPortResponse, error)
 	DeletePort(ctx context.Context, req *DeletePortRequest) (*DeletePortResponse, error)
+	RestorePort(ctx context.Context, req *RestorePortRequest) (*RestorePortResponse, error)
+	LockPort(ctx context.Context, req *LockPortRequest) (*LockPortResponse, error)
+	UnlockPort(ctx context.Context, req *UnlockPortRequest) (*UnlockPortResponse, error)
+	WaitForPortProvisioning(ctx context.Context, portID string) (bool, error)
 }
 
 type ParsedProductsResponse struct {
@@ -33,8 +40,7 @@ type ParsedProductsResponse struct {
 
 // PortServiceOp handles communication with Port methods of the Megaport API.
 type PortServiceOp struct {
-	Client           *Client
-	ProductServiceOp *ProductServiceOp
+	Client *Client
 }
 
 type BuyPortRequest struct {
@@ -67,6 +73,10 @@ type BuyLAGPortRequest struct {
 	IsPrivate  bool
 }
 
+type GetPortRequest struct {
+	PortID string
+}
+
 type ModifyPortRequest struct {
 	PortID                string
 	Name                  string
@@ -84,6 +94,24 @@ type DeletePortRequest struct {
 }
 
 type DeletePortResponse struct{}
+
+type RestorePortRequest struct {
+	PortID string
+}
+
+type RestorePortResponse struct{}
+
+type LockPortRequest struct {
+	PortID string
+}
+
+type LockPortResponse struct{}
+
+type UnlockPortRequest struct {
+	PortID string
+}
+
+type UnlockPortResponse struct{}
 
 func NewPortServiceOp(c *Client) *PortServiceOp {
 	return &PortServiceOp{
@@ -176,6 +204,9 @@ func (svc *PortServiceOp) ListPorts(ctx context.Context) ([]*types.Port, error) 
 		return nil, err
 	}
 	response, err := svc.Client.Do(ctx, req, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	defer response.Body.Close() // nolint
 
@@ -223,6 +254,41 @@ func (svc *PortServiceOp) ListPorts(ctx context.Context) ([]*types.Port, error) 
 	return ports, nil
 }
 
+func (svc *PortServiceOp) GetPort(ctx context.Context, req *GetPortRequest) (*types.Port, error) {
+	path := "/v2/product/" + req.PortID
+	url := svc.Client.BaseURL.JoinPath(path).String()
+
+	clientReq, err := svc.Client.NewRequest(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := svc.Client.Do(ctx, clientReq, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	isError, parsedError := svc.Client.IsErrorResponse(response, &err, 200)
+
+	if isError {
+		return nil, parsedError
+	}
+
+	body, fileErr := io.ReadAll(response.Body)
+
+	if fileErr != nil {
+		return nil, fileErr
+	}
+
+	portDetails := types.PortResponse{}
+	unmarshalErr := json.Unmarshal(body, &portDetails)
+	if unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
+
+	return &portDetails.Data, nil
+}
+
 func (svc *PortServiceOp) ModifyPort(ctx context.Context, req *ModifyPortRequest) (*ModifyPortResponse, error) {
 	modifyRes, err := svc.Client.ProductService.ModifyProduct(ctx, &ModifyProductRequest{
 		ProductID:             req.PortID,
@@ -248,4 +314,78 @@ func (svc *PortServiceOp) DeletePort(ctx context.Context, req *DeletePortRequest
 		return nil, err
 	}
 	return &DeletePortResponse{}, nil
+}
+
+func (svc *PortServiceOp) RestorePort(ctx context.Context, req *RestorePortRequest) (*RestorePortResponse, error) {
+	_, err := svc.Client.ProductService.RestoreProduct(ctx, &RestoreProductRequest{
+		ProductID: req.PortID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &RestorePortResponse{}, nil
+}
+
+func (svc *PortServiceOp) LockPort(ctx context.Context, req *LockPortRequest) (*LockPortResponse, error) {
+	port, err := svc.GetPort(ctx, &GetPortRequest{
+		PortID: req.PortID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !port.Locked {
+		_, err = svc.Client.ProductService.ManageProductLock(ctx, &ManageProductLockRequest{
+			ProductID:  req.PortID,
+			ShouldLock: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &LockPortResponse{}, nil
+	} else {
+		return nil, errors.New(mega_err.ERR_PORT_ALREADY_LOCKED)
+	}
+}
+
+func (svc *PortServiceOp) UnlockPort(ctx context.Context, req *UnlockPortRequest) (*UnlockPortResponse, error) {
+	port, err := svc.GetPort(ctx, &GetPortRequest{
+		PortID: req.PortID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if port.Locked {
+		_, err = svc.Client.ProductService.ManageProductLock(ctx, &ManageProductLockRequest{
+			ProductID:  req.PortID,
+			ShouldLock: false,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &UnlockPortResponse{}, nil
+	} else {
+		return nil, errors.New(mega_err.ERR_PORT_NOT_LOCKED)
+	}
+}
+
+func (svc *PortServiceOp) WaitForPortProvisioning(ctx context.Context, portId string) (bool, error) {
+	// Try for ~5mins.
+	for i := 0; i < 30; i++ {
+		details, err := svc.GetPort(ctx, &GetPortRequest{
+			PortID: portId,
+		})
+		if err != nil {
+			return false, err
+		}
+
+		if slices.Contains(shared.SERVICE_STATE_READY, details.ProvisioningStatus) {
+			return true, nil
+		}
+
+		// Wrong status, wait a bit and try again.
+		svc.Client.Logger.Debug(fmt.Sprintf("Port status is currently %q - waiting", details.ProvisioningStatus), "status", details.ProvisioningStatus, "port_id", portId)
+		time.Sleep(10 * time.Second)
+	}
+
+	return false, errors.New(mega_err.ERR_PORT_PROVISION_TIMEOUT_EXCEED)
 }

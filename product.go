@@ -16,6 +16,13 @@ type ProductService interface {
 	ExecuteOrder(ctx context.Context, requestBody *[]byte) (*[]byte, error)
 	ModifyProduct(ctx context.Context, req *ModifyProductRequest) (*ModifyProductResponse, error)
 	DeleteProduct(ctx context.Context, req *DeleteProductRequest) (*DeleteProductResponse, error)
+	RestoreProduct(ctx context.Context, req *RestoreProductRequest) (*RestoreProductResponse, error)
+	ManageProductLock(ctx context.Context, req *ManageProductLockRequest) (*ManageProductLockResponse, error)
+}
+
+// ProductServiceOp handles communication with Product methods of the Megaport API.
+type ProductServiceOp struct {
+	Client *Client
 }
 
 type ModifyProductRequest struct {
@@ -37,10 +44,18 @@ type DeleteProductRequest struct {
 
 type DeleteProductResponse struct{}
 
-// ProductServiceOp handles communication with Product methods of the Megaport API.
-type ProductServiceOp struct {
-	Client *Client
+type RestoreProductRequest struct {
+	ProductID string
 }
+
+type RestoreProductResponse struct{}
+
+type ManageProductLockRequest struct {
+	ProductID  string
+	ShouldLock bool
+}
+
+type ManageProductLockResponse struct{}
 
 func NewProductServiceOp(c *Client) *ProductServiceOp {
 	return &ProductServiceOp{
@@ -140,6 +155,9 @@ func (svc *ProductServiceOp) DeleteProduct(ctx context.Context, req *DeleteProdu
 	}
 
 	deleteResp, err := svc.Client.Do(ctx, clientReq, nil)
+	if err != nil {
+		return nil, err
+	}
 	defer deleteResp.Body.Close() // nolint
 
 	isError, errorMessage := svc.Client.IsErrorResponse(deleteResp, &err, 200)
@@ -147,5 +165,53 @@ func (svc *ProductServiceOp) DeleteProduct(ctx context.Context, req *DeleteProdu
 		return nil, errorMessage
 	} else {
 		return &DeleteProductResponse{}, nil
+	}
+}
+
+func (svc *ProductServiceOp) RestoreProduct(ctx context.Context, req *RestoreProductRequest) (*RestoreProductResponse, error) {
+	path := "/v2/product" + req.ProductID + "/action/UN_CANCEL"
+	url := svc.Client.BaseURL.JoinPath(path).String()
+	clientReq, err := svc.Client.NewRequest(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := svc.Client.Do(ctx, clientReq, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	isError, errorMessage := svc.Client.IsErrorResponse(response, &err, 200)
+	if isError {
+		return nil, errorMessage
+	} else {
+		return &RestoreProductResponse{}, nil
+	}
+}
+
+func (svc *ProductServiceOp) ManageProductLock(ctx context.Context, req *ManageProductLockRequest) (*ManageProductLockResponse, error) {
+	verb := "POST"
+
+	if !req.ShouldLock {
+		verb = "DELETE"
+	}
+
+	path := fmt.Sprintf("/v2/product/%s/lock", req.ProductID)
+	url := svc.Client.BaseURL.JoinPath(path).String()
+
+	clientReq, err := svc.Client.NewRequest(ctx, verb, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	lockResponse, err := svc.Client.Do(ctx, clientReq, nil)
+	if err != nil {
+		return nil, err
+	}
+	isResErr, compiledResErr := svc.Client.IsErrorResponse(lockResponse, &err, 200)
+	if isResErr {
+		return nil, compiledResErr
+	} else {
+		return &ManageProductLockResponse{}, nil
 	}
 }
