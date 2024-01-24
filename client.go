@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -41,7 +43,7 @@ type Client struct {
 	HTTPClient *http.Client
 
 	// Logger for client
-	Logger Logger
+	Logger *slog.Logger
 
 	// Base URL
 	BaseURL *url.URL
@@ -186,7 +188,7 @@ func NewClient(httpClient *http.Client, base *url.URL) *Client {
 		baseURL, _ = url.Parse(defaultBaseURL)
 	}
 
-	logger := NewDefaultLogger()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	c := &Client{
 		HTTPClient: httpClient,
@@ -282,6 +284,14 @@ func SetBaseURL(bu string) ClientOpt {
 		}
 
 		c.BaseURL = u
+		return nil
+	}
+}
+
+// SetLogHandler is an option to pass in a custom slog handler
+func SetLogHandler(h slog.Handler) ClientOpt {
+	return func(c *Client) error {
+		c.Logger = slog.New(h)
 		return nil
 	}
 }

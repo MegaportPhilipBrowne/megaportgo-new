@@ -2,9 +2,8 @@ package megaport
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"net/url"
+	"log/slog"
 	"os"
 	"testing"
 
@@ -15,52 +14,50 @@ import (
 var accessKey string
 var secretKey string
 
-var logger *DefaultLogger
-
 var megaportClient *Client
+
+var programLevel = new(slog.LevelVar)
 
 const (
 	MEGAPORTURL = "https://api-staging.megaport.com/"
 )
 
 func TestMain(m *testing.M) {
-	logger = NewDefaultLogger()
-	logger.SetLevel(DebugLevel)
 
 	accessKey = os.Getenv("MEGAPORT_ACCESS_KEY")
 	secretKey = os.Getenv("MEGAPORT_SECRET_KEY")
 
-	logLevel := os.Getenv("LOG_LEVEL")
-
-	fmt.Println(logLevel)
-	if logLevel != "" {
-		logger.SetLevel(StringToLogLevel(logLevel))
-	}
-
 	httpClient := NewHttpClient()
-	baseURL, err := url.Parse(MEGAPORTURL)
+
+	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: programLevel})
+	programLevel.Set(slog.LevelDebug)
+
+	var err error
+
+	megaportClient, err = New(httpClient, SetBaseURL(MEGAPORTURL), SetLogHandler(handler))
 	if err != nil {
-		log.Fatalf("invalid base URL: %s", MEGAPORTURL)
+		log.Fatalf("could not initialize megaport test client: %s", err.Error())
 	}
-	megaportClient = NewClient(httpClient, baseURL)
+
 	os.Exit(m.Run())
 }
 
 func TestLoginOauth(t *testing.T) {
+	megaportClient.Logger.Debug("testing login oauth")
 	if accessKey == "" {
-		logger.Error("MEGAPORT_ACCESS_KEY environment variable not set.")
+		megaportClient.Logger.Error("MEGAPORT_ACCESS_KEY environment variable not set.")
 		os.Exit(1)
 	}
 
 	if secretKey == "" {
-		logger.Error("MEGAPORT_SECRET_KEY environment variable not set.")
+		megaportClient.Logger.Error("MEGAPORT_SECRET_KEY environment variable not set.")
 		os.Exit(1)
 	}
 
 	ctx := context.Background()
 	token, loginErr := megaportClient.AuthenticationService.LoginOauth(ctx, accessKey, secretKey)
 	if loginErr != nil {
-		logger.Error("login error", "error", loginErr.Error())
+		megaportClient.Logger.Error("login error", "error", loginErr.Error())
 	}
 	assert.NoError(t, loginErr)
 
@@ -69,6 +66,6 @@ func TestLoginOauth(t *testing.T) {
 	// SessionToken is a valid guid
 	assert.NotNil(t, shared.IsGuid(token))
 
-	logger.Info("", "token", token)
+	megaportClient.Logger.Info("", "token", token)
 	megaportClient.SessionToken = token
 }

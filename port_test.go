@@ -50,7 +50,7 @@ func TestSinglePort(t *testing.T) {
 
 	portsListPostCreate, err := megaportClient.PortService.ListPorts(ctx)
 	if err != nil {
-		logger.Debug("Failed to get ports list", "error", err)
+		megaportClient.Logger.Debug("Failed to get ports list", "error", err)
 		t.FailNow()
 	}
 
@@ -62,7 +62,7 @@ func TestSinglePort(t *testing.T) {
 	}
 
 	if !portIsActuallyNew {
-		logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
+		megaportClient.Logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
 		t.FailNow()
 	}
 
@@ -74,7 +74,7 @@ func TestSinglePort(t *testing.T) {
 	}
 
 	if !foundNewPort {
-		logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
+		megaportClient.Logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
 		t.FailNow()
 	}
 
@@ -116,7 +116,7 @@ func TestLAGPort(t *testing.T) {
 
 	portsListPostCreate, err := megaportClient.PortService.ListPorts(ctx)
 	if err != nil {
-		logger.Error("Failed to get ports list", "error", err)
+		megaportClient.Logger.Error("Failed to get ports list", "error", err)
 		t.FailNow()
 	}
 
@@ -128,7 +128,7 @@ func TestLAGPort(t *testing.T) {
 	}
 
 	if !portIsActuallyNew {
-		logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
+		megaportClient.Logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
 		t.FailNow()
 	}
 
@@ -140,7 +140,7 @@ func TestLAGPort(t *testing.T) {
 	}
 
 	if !foundNewPort {
-		logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
+		megaportClient.Logger.Debug("Failed to find port we just created in ports list", "port_id", portId)
 		t.FailNow()
 	}
 
@@ -152,7 +152,7 @@ func testCreatePort(c *Client, ctx context.Context, portType string, location ty
 	var portConfirm *types.PortOrderConfirmation
 	var portErr error
 
-	logger.Debug("Buying Port", "port_type", portType)
+	megaportClient.Logger.Debug("Buying Port", "port_type", portType)
 	if portType == types.LAG_PORT {
 		portConfirm, portErr = c.PortService.BuyLAGPort(ctx, &BuyLAGPortRequest{
 			Name:       "Buy Port (LAG) Test",
@@ -176,7 +176,7 @@ func testCreatePort(c *Client, ctx context.Context, portType string, location ty
 	if portErr != nil {
 		return nil, portErr
 	}
-	logger.Debug("Port Purchased", "port_confirmation", portConfirm)
+	megaportClient.Logger.Debug("Port Purchased", "port_confirmation", portConfirm)
 	return portConfirm, portErr
 }
 
@@ -188,7 +188,7 @@ func testModifyPort(c *Client, ctx context.Context, portId string, portType stri
 
 	newPortName := fmt.Sprintf("Buy Port (%s) [Modified]", portType)
 
-	logger.Debug("Modifying Port", "port_id", portId, "port_type", portType)
+	megaportClient.Logger.Debug("Modifying Port", "port_id", portId, "port_type", portType)
 	_, modifyErr := c.PortService.ModifyPort(ctx, &ModifyPortRequest{
 		PortID:                portId,
 		Name:                  newPortName,
@@ -208,7 +208,7 @@ func testModifyPort(c *Client, ctx context.Context, portId string, portType stri
 // and Soft/Hard Deletes.
 func testCancelPort(c *Client, ctx context.Context, portId string, portType string, t *testing.T) {
 	// Soft Delete
-	logger.Debug("Scheduling Port for deletion (30 days).", "port_id", portId, "port_type", portType)
+	megaportClient.Logger.Debug("Scheduling Port for deletion (30 days).", "port_id", portId, "port_type", portType)
 	resp, deleteErr := c.PortService.DeletePort(ctx, &DeletePortRequest{
 		PortID:    portId,
 		DeleteNow: false,
@@ -220,7 +220,7 @@ func testCancelPort(c *Client, ctx context.Context, portId string, portType stri
 	assert.NoError(t, err)
 	assert.EqualValues(t, types.STATUS_CANCELLED, portInfo.ProvisioningStatus)
 
-	logger.Debug("", "status", portInfo.ProvisioningStatus, "port_id", portId)
+	megaportClient.Logger.Debug("", "status", portInfo.ProvisioningStatus, "port_id", portId)
 	restoreResp, restoreErr := c.PortService.RestorePort(ctx, &RestorePortRequest{PortID: portId})
 	assert.NoError(t, restoreErr)
 	assert.True(t, restoreResp.IsRestoring)
@@ -229,7 +229,7 @@ func testCancelPort(c *Client, ctx context.Context, portId string, portType stri
 
 func testDeletePort(c *Client, ctx context.Context, portId string, portType string, t *testing.T) {
 	// Hard Delete
-	logger.Debug("Deleting Port now.", "port_type", portType, "port_id", portId)
+	megaportClient.Logger.Debug("Deleting Port now.", "port_type", portType, "port_id", portId)
 	hardDeleteResp, deleteErr := c.PortService.DeletePort(ctx, &DeletePortRequest{
 		PortID:    portId,
 		DeleteNow: true,
@@ -243,11 +243,11 @@ func testDeletePort(c *Client, ctx context.Context, portId string, portType stri
 	assert.NoError(t, err)
 
 	assert.EqualValues(t, types.STATUS_DECOMMISSIONED, portInfo.ProvisioningStatus)
-	logger.Debug("", "status", portInfo.ProvisioningStatus, "port_id", portId)
+	megaportClient.Logger.Debug("", "status", portInfo.ProvisioningStatus, "port_id", portId)
 }
 
 func testLockPort(c *Client, ctx context.Context, portId string, t *testing.T) {
-	logger.Debug("Locking Port now.", "port_id", portId)
+	megaportClient.Logger.Debug("Locking Port now.", "port_id", portId)
 	lockResp, lockErr := c.PortService.LockPort(ctx, &LockPortRequest{PortID: portId})
 	assert.True(t, lockResp.IsLocking)
 	assert.NoError(t, lockErr)
@@ -258,17 +258,17 @@ func testLockPort(c *Client, ctx context.Context, portId string, t *testing.T) {
 	assert.NoError(t, err)
 	assert.EqualValues(t, true, portInfo.Locked)
 
-	logger.Debug("Test lock of an already locked port.", "port_id", portId)
+	megaportClient.Logger.Debug("Test lock of an already locked port.", "port_id", portId)
 	lockRes, lockErr := c.PortService.LockPort(ctx, &LockPortRequest{PortID: portId})
 	assert.Nil(t, lockRes)
 	assert.Error(t, errors.New(mega_err.ERR_PORT_ALREADY_LOCKED), lockErr)
 
-	logger.Debug("Unlocking Port now.", "port_id", portId)
+	megaportClient.Logger.Debug("Unlocking Port now.", "port_id", portId)
 	unlockResp, unlockErr := c.PortService.UnlockPort(ctx, &UnlockPortRequest{PortID: portId})
 	assert.True(t, unlockResp.IsUnlocking)
 	assert.NoError(t, unlockErr)
 
-	logger.Debug("Test unlocking of a port that doesn't have a lock.", "port_id", portId)
+	megaportClient.Logger.Debug("Test unlocking of a port that doesn't have a lock.", "port_id", portId)
 	unlockResp, unlockErr = c.PortService.UnlockPort(ctx, &UnlockPortRequest{PortID: portId})
 	assert.Nil(t, unlockResp)
 	assert.Error(t, errors.New(mega_err.ERR_PORT_NOT_LOCKED), unlockErr)
